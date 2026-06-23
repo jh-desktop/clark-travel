@@ -451,6 +451,8 @@ body {
 }
 .loc-header-actions { display: flex; align-items: center; gap: 0.6rem; }
 .loc-my-name { font-size: 0.82rem; color: var(--muted2); font-family: var(--mono); }
+.loc-share-status { font-size: 0.75rem; font-family: var(--mono); color: var(--muted); }
+.loc-share-status.active { color: var(--green); }
 .loc-btn-start {
   padding: 0.35rem 0.9rem;
   font-size: 0.82rem;

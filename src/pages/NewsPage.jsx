@@ -1,27 +1,42 @@
 import { useState, useEffect } from 'react'
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
-import { db } from '../firebase'
+import { ref, onValue, remove } from 'firebase/database'
+import { rtdb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
+function renderBody(body) {
+  if (!body) return null
+  return body.split('\n').map((line, i) => {
+    const trimmed = line.trim()
+    if (/^https?:\/\/.+/i.test(trimmed) && /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(trimmed)) {
+      return <img key={i} src={trimmed} alt="" className="post-image" />
+    }
+    if (trimmed === '') return <div key={i} className="post-br" />
+    return <span key={i}>{line}<br /></span>
+  })
+}
+
 export default function NewsPage() {
-  const { user } = useAuth()
+  const { isAdmin } = useAuth()
   const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'clark-news'), orderBy('createdAt', 'desc'))
-    return onSnapshot(q, snap => {
-      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    return onValue(ref(rtdb, 'clark-news'), snapshot => {
+      const data = snapshot.val() || {}
+      const list = Object.entries(data)
+        .map(([id, p]) => ({ id, ...p }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+      setPosts(list)
       setLoading(false)
     })
   }, [])
 
   async function handleDelete(id) {
     if (!confirm('삭제하시겠습니까?')) return
-    await deleteDoc(doc(db, 'clark-news', id))
+    await remove(ref(rtdb, `clark-news/${id}`))
     if (selected?.id === id) setSelected(null)
   }
 
@@ -33,11 +48,11 @@ export default function NewsPage() {
           <div className="post-detail">
             <div className="post-meta-row">
               <span className="post-tag">{selected.tag || '뉴스'}</span>
-              <span className="post-date">{selected.createdAt?.toDate().toLocaleDateString('ko-KR')}</span>
+              <span className="post-date">{new Date(selected.createdAt).toLocaleDateString('ko-KR')}</span>
             </div>
             <h1 className="post-title">{selected.title}</h1>
-            <div className="post-body">{selected.body}</div>
-            {user && (
+            <div className="post-body">{renderBody(selected.body)}</div>
+            {isAdmin && (
               <button className="delete-btn" onClick={() => handleDelete(selected.id)}>삭제</button>
             )}
           </div>
@@ -54,7 +69,7 @@ export default function NewsPage() {
           <p className="page-sub">클락 여행 관련 최신 소식을 전합니다.</p>
         </div>
 
-        {user && (
+        {isAdmin && (
           <button className="btn-primary" style={{ marginBottom: '1.5rem' }} onClick={() => navigate('/admin')}>
             + 새 글 작성
           </button>
@@ -68,17 +83,15 @@ export default function NewsPage() {
             <div key={post.id} className="news-card" onClick={() => setSelected(post)}>
               <div className="news-card-top">
                 <span className="post-tag">{post.tag || '뉴스'}</span>
-                <span className="post-date">{post.createdAt?.toDate().toLocaleDateString('ko-KR')}</span>
+                <span className="post-date">{new Date(post.createdAt).toLocaleDateString('ko-KR')}</span>
               </div>
               <div className="news-card-title">{post.title}</div>
-              <div className="news-card-preview">{post.body?.slice(0, 120)}{post.body?.length > 120 ? '...' : ''}</div>
-              {user && (
-                <button
-                  className="delete-btn-sm"
-                  onClick={e => { e.stopPropagation(); handleDelete(post.id) }}
-                >
-                  삭제
-                </button>
+              <div className="news-card-preview">
+                {post.body?.replace(/^https?:\/\/.+$/gm, '').replace(/\n+/g, ' ').trim().slice(0, 120)}
+                {post.body?.length > 120 ? '...' : ''}
+              </div>
+              {isAdmin && (
+                <button className="delete-btn-sm" onClick={e => { e.stopPropagation(); handleDelete(post.id) }}>삭제</button>
               )}
             </div>
           ))}

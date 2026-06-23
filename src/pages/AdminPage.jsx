@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '../firebase'
+import { ref, push } from 'firebase/database'
+import { rtdb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 
 const TAGS = ['뉴스', '공지', '여행팁', '카지노', '골프', '음식', '기타']
@@ -27,11 +27,11 @@ export default function AdminPage() {
     e.preventDefault()
     if (!title.trim() || !body.trim()) return
     setSaving(true)
-    await addDoc(collection(db, 'clark-news'), {
+    await push(ref(rtdb, 'clark-news'), {
       title: title.trim(),
       body: body.trim(),
       tag,
-      createdAt: serverTimestamp(),
+      createdAt: Date.now(),
     })
     setTitle('')
     setBody('')

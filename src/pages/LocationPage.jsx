@@ -1,32 +1,38 @@
 import { useState, useEffect, useRef } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { Loader } from '@googlemaps/js-api-loader'
 import { db } from '../firebase'
 import { doc, setDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore'
 
-const STALE_MS = 30 * 60 * 1000 // 30분 이상 업데이트 없으면 제외
+const STALE_MS = 30 * 60 * 1000
 
 function getDeviceId() {
   let id = localStorage.getItem('clark-device-id')
   if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()
+    id = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now())
     localStorage.setItem('clark-device-id', id)
   }
   return id
 }
 
 const DEVICE_ID = getDeviceId()
-const CLARK_CENTER = [15.179, 120.554]
+const CLARK_CENTER = { lat: 15.179, lng: 120.554 }
 
-function makeIcon(name, isMe) {
-  return L.divIcon({
-    html: `<div class="map-pin${isMe ? ' map-pin-me' : ''}">${name.slice(0, 2)}</div>`,
-    className: '',
-    iconSize: [42, 52],
-    iconAnchor: [21, 52],
-    popupAnchor: [0, -54],
-  })
-}
+const DARK_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0a1628' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2d45' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0d1825' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#1e3a56' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#051225' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+]
 
 export default function LocationPage() {
   const [name, setName] = useState(() => localStorage.getItem('clark-name') || '')
@@ -34,13 +40,14 @@ export default function LocationPage() {
   const [sharing, setSharing] = useState(false)
   const [locations, setLocations] = useState([])
   const [status, setStatus] = useState('')
+  const [mapReady, setMapReady] = useState(false)
 
   const mapRef = useRef(null)
   const mapInst = useRef(null)
   const markers = useRef({})
+  const infoWindows = useRef({})
   const watchId = useRef(null)
 
-  // 이름 저장
   function saveName(e) {
     e.preventDefault()
     const n = nameInput.trim()
@@ -49,69 +56,130 @@ export default function LocationPage() {
     setName(n)
   }
 
-  // 지도 초기화
+  // Google Maps 초기화
   useEffect(() => {
     if (!name || !mapRef.current || mapInst.current) return
-    mapInst.current = L.map(mapRef.current, { center: CLARK_CENTER, zoom: 14 })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(mapInst.current)
+
+    const loader = new Loader({
+      apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+      version: 'weekly',
+    })
+
+    loader.load().then(() => {
+      const google = window.google
+      mapInst.current = new google.maps.Map(mapRef.current, {
+        center: CLARK_CENTER,
+        zoom: 14,
+        styles: DARK_STYLE,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        zoomControl: true,
+      })
+      setMapReady(true)
+    }).catch(err => {
+      setStatus('지도 로드 실패: ' + err.message)
+    })
+
     return () => {
-      mapInst.current?.remove()
-      mapInst.current = null
+      Object.values(markers.current).forEach(m => m.setMap(null))
+      Object.values(infoWindows.current).forEach(w => w.close())
       markers.current = {}
+      infoWindows.current = {}
+      mapInst.current = null
+      setMapReady(false)
     }
   }, [name])
 
   // 마커 업데이트
   useEffect(() => {
+    if (!mapReady || !mapInst.current || !window.google) return
     const map = mapInst.current
-    if (!map) return
+    const google = window.google
 
-    // 사라진 유저 마커 제거
+    // 사라진 유저 제거
     Object.keys(markers.current).forEach(id => {
       if (!locations.find(l => l.id === id)) {
-        markers.current[id].remove()
+        markers.current[id].setMap(null)
+        infoWindows.current[id]?.close()
         delete markers.current[id]
+        delete infoWindows.current[id]
       }
     })
 
-    // 마커 추가 / 위치 갱신
     locations.forEach(loc => {
-      const icon = makeIcon(loc.name, loc.id === DEVICE_ID)
+      const isMe = loc.id === DEVICE_ID
       const time = loc.updatedAt?.toDate().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-      const popup = `<b>${loc.name}</b>${loc.id === DEVICE_ID ? ' <span style="color:#0ea5e9">(나)</span>' : ''}<br/><small>${time} 업데이트</small>`
+      const pos = { lat: loc.lat, lng: loc.lng }
+
+      const icon = {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 22,
+        fillColor: isMe ? '#0ea5e9' : '#374151',
+        fillOpacity: 1,
+        strokeColor: isMe ? '#bae6fd' : '#6b7280',
+        strokeWeight: 2,
+      }
+
+      const label = {
+        text: loc.name.slice(0, 2),
+        color: isMe ? '#060d1a' : '#e2e8f0',
+        fontWeight: '700',
+        fontSize: '12px',
+      }
+
+      const infoContent = `
+        <div style="background:#0d1825;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-family:sans-serif;min-width:80px">
+          <div style="font-weight:700;font-size:14px">${loc.name}${isMe ? ' <span style="color:#0ea5e9">(나)</span>' : ''}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-top:2px">${time} 업데이트</div>
+        </div>`
+
       if (markers.current[loc.id]) {
-        markers.current[loc.id].setLatLng([loc.lat, loc.lng]).setIcon(icon).setPopupContent(popup)
+        markers.current[loc.id].setPosition(pos)
+        markers.current[loc.id].setIcon(icon)
+        markers.current[loc.id].setLabel(label)
+        infoWindows.current[loc.id]?.setContent(infoContent)
       } else {
-        markers.current[loc.id] = L.marker([loc.lat, loc.lng], { icon })
-          .addTo(map)
-          .bindPopup(popup)
+        const marker = new google.maps.Marker({ position: pos, map, icon, label, title: loc.name })
+        const infoWindow = new google.maps.InfoWindow({ content: infoContent })
+
+        marker.addListener('click', () => {
+          Object.values(infoWindows.current).forEach(w => w.close())
+          infoWindow.open(map, marker)
+        })
+
+        markers.current[loc.id] = marker
+        infoWindows.current[loc.id] = infoWindow
       }
     })
 
-    // 전체 마커 범위에 맞춰 뷰 조정
-    const vals = Object.values(markers.current)
-    if (vals.length === 1) {
-      map.setView(vals[0].getLatLng(), 16)
-    } else if (vals.length > 1) {
-      map.fitBounds(L.featureGroup(vals).getBounds().pad(0.2), { maxZoom: 17 })
+    // 지도 범위 맞추기
+    if (locations.length === 1) {
+      map.setCenter({ lat: locations[0].lat, lng: locations[0].lng })
+      map.setZoom(17)
+    } else if (locations.length > 1) {
+      const bounds = new google.maps.LatLngBounds()
+      locations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }))
+      map.fitBounds(bounds, { top: 60, bottom: 100, left: 40, right: 40 })
     }
-  }, [locations])
+  }, [locations, mapReady])
 
   // Firestore 실시간 구독
   useEffect(() => {
     if (!name) return
-    return onSnapshot(collection(db, 'clark-locations'), snap => {
-      const now = Date.now()
-      setLocations(
-        snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(l => l.active && l.lat && l.lng && l.updatedAt)
-          .filter(l => now - (l.updatedAt.toMillis?.() ?? 0) < STALE_MS)
-      )
-    })
+    return onSnapshot(
+      collection(db, 'clark-locations'),
+      snap => {
+        const now = Date.now()
+        setLocations(
+          snap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(l => l.active && l.lat != null && l.lng != null && l.updatedAt)
+            .filter(l => now - (l.updatedAt.toMillis?.() ?? 0) < STALE_MS)
+        )
+      },
+      err => setStatus('데이터 로드 오류: ' + err.message)
+    )
   }, [name])
 
   // 위치 공유 시작
@@ -125,12 +193,15 @@ export default function LocationPage() {
       ({ coords: { latitude: lat, longitude: lng } }) => {
         setDoc(doc(db, 'clark-locations', DEVICE_ID), {
           name, lat, lng, active: true, updatedAt: serverTimestamp(),
-        })
+        }).catch(err => setStatus('저장 오류: ' + err.message))
         setSharing(true)
         setStatus('')
       },
-      () => setStatus('위치 접근이 거부되었습니다. 브라우저 설정에서 허용해주세요.'),
-      { enableHighAccuracy: true, maximumAge: 8000, timeout: 10000 }
+      err => {
+        if (err.code === 1) setStatus('위치 접근이 거부되었습니다. 브라우저 설정에서 허용해 주세요.')
+        else setStatus('위치를 가져오지 못했습니다. (' + err.message + ')')
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     )
   }
 
@@ -144,19 +215,15 @@ export default function LocationPage() {
     setSharing(false)
   }
 
-  // 언마운트 시 정리
-  useEffect(() => {
-    return () => {
-      if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current)
-    }
+  useEffect(() => () => {
+    if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current)
   }, [])
 
-  // 탭 닫을 때 공유 중단
   useEffect(() => {
     if (!sharing) return
-    const off = () => setDoc(doc(db, 'clark-locations', DEVICE_ID), { active: false }, { merge: true })
-    window.addEventListener('beforeunload', off)
-    return () => window.removeEventListener('beforeunload', off)
+    const handler = () => setDoc(doc(db, 'clark-locations', DEVICE_ID), { active: false }, { merge: true })
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
   }, [sharing])
 
   // ── 이름 입력 화면 ──
@@ -192,7 +259,6 @@ export default function LocationPage() {
   // ── 지도 화면 ──
   return (
     <div className="loc-page pt-nav">
-      {/* 상단 헤더 */}
       <div className="loc-header">
         <div className="loc-header-info">
           <span className="loc-header-title">실시간 위치</span>
@@ -210,10 +276,8 @@ export default function LocationPage() {
 
       {status && <div className="loc-status-bar">{status}</div>}
 
-      {/* 지도 */}
       <div className="loc-map-wrap" ref={mapRef} />
 
-      {/* 하단 멤버 목록 */}
       {locations.length > 0 && (
         <div className="loc-member-bar">
           {locations.map(loc => {
@@ -223,8 +287,11 @@ export default function LocationPage() {
                 key={loc.id}
                 className={'loc-member' + (loc.id === DEVICE_ID ? ' loc-member-me' : '')}
                 onClick={() => {
-                  mapInst.current?.setView([loc.lat, loc.lng], 17)
-                  markers.current[loc.id]?.openPopup()
+                  if (!mapInst.current || !window.google) return
+                  mapInst.current.setCenter({ lat: loc.lat, lng: loc.lng })
+                  mapInst.current.setZoom(17)
+                  Object.values(infoWindows.current).forEach(w => w.close())
+                  infoWindows.current[loc.id]?.open(mapInst.current, markers.current[loc.id])
                 }}
               >
                 <div className="loc-member-avatar">{loc.name.slice(0, 2)}</div>

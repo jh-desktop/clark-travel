@@ -13,11 +13,14 @@ export default function Navbar() {
         <NavLink to="/" end className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
           D-Day
         </NavLink>
+        <NavLink to="/location" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+          📍 위치
+        </NavLink>
         <NavLink to="/news" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
           뉴스
         </NavLink>
         <NavLink to="/guide" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-          여행가이드
+          가이드
         </NavLink>
         {isAdmin ? (
           <>

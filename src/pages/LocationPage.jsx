@@ -1,21 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { Loader } from '@googlemaps/js-api-loader'
-import { db, auth } from '../firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { auth, db, googleProvider } from '../firebase'
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
 import { doc, setDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore'
 
 const STALE_MS = 30 * 60 * 1000
-
-function getDeviceId() {
-  let id = localStorage.getItem('clark-device-id')
-  if (!id) {
-    id = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now())
-    localStorage.setItem('clark-device-id', id)
-  }
-  return id
-}
-
-const DEVICE_ID = getDeviceId()
 const CLARK_CENTER = { lat: 15.179, lng: 120.554 }
 
 const DARK_STYLE = [
@@ -31,18 +20,16 @@ const DARK_STYLE = [
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
   { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
 ]
 
 export default function LocationPage() {
-  const [name, setName] = useState(() => localStorage.getItem('clark-name') || '')
-  const [nameInput, setNameInput] = useState('')
-  const [authed, setAuthed] = useState(false)
+  const [user, setUser] = useState(undefined) // undefined = 로딩 중
   const [sharing, setSharing] = useState(false)
   const [locations, setLocations] = useState([])
   const [status, setStatus] = useState('')
   const [mapReady, setMapReady] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
 
   const mapRef = useRef(null)
   const mapInst = useRef(null)
@@ -50,17 +37,35 @@ export default function LocationPage() {
   const infoWindows = useRef({})
   const watchId = useRef(null)
 
-  function saveName(e) {
-    e.preventDefault()
-    const n = nameInput.trim()
-    if (!n) return
-    localStorage.setItem('clark-name', n)
-    setName(n)
+  // 인증 상태 감지
+  useEffect(() => {
+    return onAuthStateChanged(auth, u => setUser(u ?? null))
+  }, [])
+
+  // Google 로그인
+  async function handleLogin() {
+    setLoginLoading(true)
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setStatus('로그인 실패: ' + err.message)
+      }
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  // 로그아웃
+  async function handleLogout() {
+    await signOut(auth)
+    setSharing(false)
+    setLocations([])
   }
 
   // Google Maps 초기화
   useEffect(() => {
-    if (!name || !mapRef.current || mapInst.current) return
+    if (!user || !mapRef.current || mapInst.current) return
 
     const loader = new Loader({
       apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
@@ -79,9 +84,7 @@ export default function LocationPage() {
         zoomControl: true,
       })
       setMapReady(true)
-    }).catch(err => {
-      setStatus('지도 로드 실패: ' + err.message)
-    })
+    }).catch(err => setStatus('지도 로드 실패: ' + err.message))
 
     return () => {
       Object.values(markers.current).forEach(m => m.setMap(null))
@@ -91,7 +94,7 @@ export default function LocationPage() {
       mapInst.current = null
       setMapReady(false)
     }
-  }, [name])
+  }, [user])
 
   // 마커 업데이트
   useEffect(() => {
@@ -99,7 +102,6 @@ export default function LocationPage() {
     const map = mapInst.current
     const google = window.google
 
-    // 사라진 유저 제거
     Object.keys(markers.current).forEach(id => {
       if (!locations.find(l => l.id === id)) {
         markers.current[id].setMap(null)
@@ -110,7 +112,7 @@ export default function LocationPage() {
     })
 
     locations.forEach(loc => {
-      const isMe = loc.id === DEVICE_ID
+      const isMe = loc.id === user?.uid
       const time = loc.updatedAt?.toDate().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       const pos = { lat: loc.lat, lng: loc.lng }
 
@@ -122,16 +124,14 @@ export default function LocationPage() {
         strokeColor: isMe ? '#bae6fd' : '#6b7280',
         strokeWeight: 2,
       }
-
       const label = {
         text: loc.name.slice(0, 2),
         color: isMe ? '#060d1a' : '#e2e8f0',
         fontWeight: '700',
         fontSize: '12px',
       }
-
       const infoContent = `
-        <div style="background:#0d1825;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-family:sans-serif;min-width:80px">
+        <div style="background:#0d1825;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-family:sans-serif">
           <div style="font-weight:700;font-size:14px">${loc.name}${isMe ? ' <span style="color:#0ea5e9">(나)</span>' : ''}</div>
           <div style="font-size:11px;color:#9ca3af;margin-top:2px">${time} 업데이트</div>
         </div>`
@@ -144,18 +144,15 @@ export default function LocationPage() {
       } else {
         const marker = new google.maps.Marker({ position: pos, map, icon, label, title: loc.name })
         const infoWindow = new google.maps.InfoWindow({ content: infoContent })
-
         marker.addListener('click', () => {
           Object.values(infoWindows.current).forEach(w => w.close())
           infoWindow.open(map, marker)
         })
-
         markers.current[loc.id] = marker
         infoWindows.current[loc.id] = infoWindow
       }
     })
 
-    // 지도 범위 맞추기
     if (locations.length === 1) {
       map.setCenter({ lat: locations[0].lat, lng: locations[0].lng })
       map.setZoom(17)
@@ -164,16 +161,11 @@ export default function LocationPage() {
       locations.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }))
       map.fitBounds(bounds, { top: 60, bottom: 100, left: 40, right: 40 })
     }
-  }, [locations, mapReady])
+  }, [locations, mapReady, user])
 
-  // 익명 인증 상태 추적
+  // Firestore 실시간 구독 — 로그인 후에만
   useEffect(() => {
-    return onAuthStateChanged(auth, user => setAuthed(!!user))
-  }, [])
-
-  // Firestore 실시간 구독 — 인증 완료 후에만 시작
-  useEffect(() => {
-    if (!name || !authed) return
+    if (!user) return
     return onSnapshot(
       collection(db, 'clark-locations'),
       snap => {
@@ -185,28 +177,26 @@ export default function LocationPage() {
             .filter(l => now - (l.updatedAt.toMillis?.() ?? 0) < STALE_MS)
         )
       },
-      err => setStatus('데이터 로드 오류: ' + err.message)
+      err => setStatus('오류: ' + err.message)
     )
-  }, [name, authed])
+  }, [user])
 
   // 위치 공유 시작
   function startSharing() {
-    if (!navigator.geolocation) {
-      setStatus('이 브라우저는 위치 기능을 지원하지 않습니다.')
-      return
-    }
+    if (!navigator.geolocation) { setStatus('위치 기능을 지원하지 않는 브라우저예요.'); return }
     setStatus('위치 권한 요청 중...')
     watchId.current = navigator.geolocation.watchPosition(
       ({ coords: { latitude: lat, longitude: lng } }) => {
-        setDoc(doc(db, 'clark-locations', DEVICE_ID), {
-          name, lat, lng, active: true, updatedAt: serverTimestamp(),
+        setDoc(doc(db, 'clark-locations', user.uid), {
+          name: user.displayName || user.email?.split('@')[0] || '사용자',
+          lat, lng, active: true, updatedAt: serverTimestamp(),
         }).catch(err => setStatus('저장 오류: ' + err.message))
         setSharing(true)
         setStatus('')
       },
       err => {
         if (err.code === 1) setStatus('위치 접근이 거부되었습니다. 브라우저 설정에서 허용해 주세요.')
-        else setStatus('위치를 가져오지 못했습니다. (' + err.message + ')')
+        else setStatus('위치를 가져오지 못했습니다.')
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     )
@@ -214,11 +204,8 @@ export default function LocationPage() {
 
   // 위치 공유 중단
   function stopSharing() {
-    if (watchId.current != null) {
-      navigator.geolocation.clearWatch(watchId.current)
-      watchId.current = null
-    }
-    setDoc(doc(db, 'clark-locations', DEVICE_ID), { active: false }, { merge: true })
+    if (watchId.current != null) { navigator.geolocation.clearWatch(watchId.current); watchId.current = null }
+    if (user) setDoc(doc(db, 'clark-locations', user.uid), { active: false }, { merge: true })
     setSharing(false)
   }
 
@@ -227,14 +214,23 @@ export default function LocationPage() {
   }, [])
 
   useEffect(() => {
-    if (!sharing) return
-    const handler = () => setDoc(doc(db, 'clark-locations', DEVICE_ID), { active: false }, { merge: true })
+    if (!sharing || !user) return
+    const handler = () => setDoc(doc(db, 'clark-locations', user.uid), { active: false }, { merge: true })
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [sharing])
+  }, [sharing, user])
 
-  // ── 이름 입력 화면 ──
-  if (!name) {
+  // ── 로딩 중 ──
+  if (user === undefined) {
+    return (
+      <div className="pt-nav content">
+        <div className="loc-setup"><div className="loc-setup-box" style={{ textAlign: 'center', color: 'var(--muted)' }}>로딩 중...</div></div>
+      </div>
+    )
+  }
+
+  // ── 로그인 화면 ──
+  if (!user) {
     return (
       <div className="pt-nav content">
         <div className="loc-setup">
@@ -242,26 +238,20 @@ export default function LocationPage() {
             <div className="loc-pin-icon">📍</div>
             <div className="loc-setup-title">위치 공유 참여</div>
             <div className="loc-setup-desc">
-              이름을 입력하면 그룹 멤버들과<br />실시간 위치를 공유할 수 있어요.
+              Google 계정으로 로그인하면<br />그룹 멤버들과 실시간 위치를 공유할 수 있어요.
             </div>
-            <form onSubmit={saveName} className="admin-form">
-              <input
-                className="admin-input"
-                type="text"
-                placeholder="이름 또는 닉네임 (최대 6자)"
-                value={nameInput}
-                onChange={e => setNameInput(e.target.value)}
-                maxLength={6}
-                autoFocus
-                required
-              />
-              <button type="submit" className="btn-primary" style={{ width: '100%' }}>참여하기</button>
-            </form>
+            {status && <div className="admin-err" style={{ marginBottom: '0.75rem' }}>{status}</div>}
+            <button className="btn-google" onClick={handleLogin} disabled={loginLoading}>
+              <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              {loginLoading ? '로그인 중...' : 'Google로 로그인'}
+            </button>
           </div>
         </div>
       </div>
     )
   }
+
+  const displayName = user.displayName || user.email?.split('@')[0] || '사용자'
 
   // ── 지도 화면 ──
   return (
@@ -272,12 +262,13 @@ export default function LocationPage() {
           <span className="loc-badge">{locations.length}명 공유 중</span>
         </div>
         <div className="loc-header-actions">
-          <span className="loc-my-name">{name}</span>
+          <span className="loc-my-name">{displayName}</span>
           {sharing ? (
             <button className="loc-btn-stop" onClick={stopSharing}>■ 공유 중단</button>
           ) : (
             <button className="loc-btn-start" onClick={startSharing}>📍 위치 공유</button>
           )}
+          <button className="nav-logout" onClick={handleLogout}>로그아웃</button>
         </div>
       </div>
 
@@ -292,7 +283,7 @@ export default function LocationPage() {
             return (
               <div
                 key={loc.id}
-                className={'loc-member' + (loc.id === DEVICE_ID ? ' loc-member-me' : '')}
+                className={'loc-member' + (loc.id === user.uid ? ' loc-member-me' : '')}
                 onClick={() => {
                   if (!mapInst.current || !window.google) return
                   mapInst.current.setCenter({ lat: loc.lat, lng: loc.lng })

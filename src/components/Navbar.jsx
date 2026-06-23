@@ -1,10 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { signOut } from 'firebase/auth'
-import { auth } from '../firebase'
 
 export default function Navbar() {
-  const { user } = useAuth()
+  const { isAdmin, logout } = useAuth()
 
   return (
     <nav className="navbar">
@@ -21,12 +19,12 @@ export default function Navbar() {
         <NavLink to="/guide" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
           여행가이드
         </NavLink>
-        {user ? (
+        {isAdmin ? (
           <>
             <NavLink to="/admin" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
               관리
             </NavLink>
-            <button className="nav-logout" onClick={() => signOut(auth)}>로그아웃</button>
+            <button className="nav-logout" onClick={logout}>로그아웃</button>
           </>
         ) : (
           <NavLink to="/admin" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>

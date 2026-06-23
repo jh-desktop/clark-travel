@@ -1,29 +1,25 @@
 import { useState } from 'react'
-import { signInWithEmailAndPassword } from 'firebase/auth'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../firebase'
+import { db } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 
 const TAGS = ['뉴스', '공지', '여행팁', '카지노', '골프', '음식', '기타']
 
 export default function AdminPage() {
-  const { user } = useAuth()
-  const [email, setEmail] = useState('')
+  const { isAdmin, login } = useAuth()
   const [pw, setPw] = useState('')
-  const [loginErr, setLoginErr] = useState('')
+  const [err, setErr] = useState('')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [tag, setTag] = useState('뉴스')
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
 
-  async function handleLogin(e) {
+  function handleLogin(e) {
     e.preventDefault()
-    setLoginErr('')
-    try {
-      await signInWithEmailAndPassword(auth, email, pw)
-    } catch {
-      setLoginErr('이메일 또는 비밀번호가 틀렸습니다.')
+    if (!login(pw)) {
+      setErr('비밀번호가 틀렸습니다.')
+      setPw('')
     }
   }
 
@@ -45,7 +41,7 @@ export default function AdminPage() {
     setTimeout(() => setDone(false), 2500)
   }
 
-  if (!user) {
+  if (!isAdmin) {
     return (
       <div className="pt-nav content">
         <div className="admin-page">
@@ -54,21 +50,14 @@ export default function AdminPage() {
             <form onSubmit={handleLogin} className="admin-form">
               <input
                 className="admin-input"
-                type="email"
-                placeholder="이메일"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
-              <input
-                className="admin-input"
                 type="password"
                 placeholder="비밀번호"
                 value={pw}
-                onChange={e => setPw(e.target.value)}
+                onChange={e => { setPw(e.target.value); setErr('') }}
+                autoFocus
                 required
               />
-              {loginErr && <div className="admin-err">{loginErr}</div>}
+              {err && <div className="admin-err">{err}</div>}
               <button type="submit" className="btn-primary" style={{ width: '100%' }}>로그인</button>
             </form>
           </div>

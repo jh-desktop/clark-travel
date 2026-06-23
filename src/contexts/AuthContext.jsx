@@ -1,17 +1,31 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged } from 'firebase/auth'
-import { auth } from '../firebase'
+import { createContext, useContext, useState } from 'react'
+
+const ADMIN_PW = import.meta.env.VITE_ADMIN_PASSWORD || 'clark2026'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(undefined)
+  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('clark-admin') === '1')
 
-  useEffect(() => {
-    return onAuthStateChanged(auth, u => setUser(u ?? null))
-  }, [])
+  function login(pw) {
+    if (pw === ADMIN_PW) {
+      sessionStorage.setItem('clark-admin', '1')
+      setIsAdmin(true)
+      return true
+    }
+    return false
+  }
 
-  return <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
+  function logout() {
+    sessionStorage.removeItem('clark-admin')
+    setIsAdmin(false)
+  }
+
+  return (
+    <AuthContext.Provider value={{ isAdmin, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => useContext(AuthContext)

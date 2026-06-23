@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Loader } from '@googlemaps/js-api-loader'
-import { db } from '../firebase'
+import { db, auth } from '../firebase'
+import { onAuthStateChanged } from 'firebase/auth'
 import { doc, setDoc, onSnapshot, collection, serverTimestamp } from 'firebase/firestore'
 
 const STALE_MS = 30 * 60 * 1000
@@ -37,6 +38,7 @@ const DARK_STYLE = [
 export default function LocationPage() {
   const [name, setName] = useState(() => localStorage.getItem('clark-name') || '')
   const [nameInput, setNameInput] = useState('')
+  const [authed, setAuthed] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [locations, setLocations] = useState([])
   const [status, setStatus] = useState('')
@@ -164,9 +166,14 @@ export default function LocationPage() {
     }
   }, [locations, mapReady])
 
-  // Firestore 실시간 구독
+  // 익명 인증 상태 추적
   useEffect(() => {
-    if (!name) return
+    return onAuthStateChanged(auth, user => setAuthed(!!user))
+  }, [])
+
+  // Firestore 실시간 구독 — 인증 완료 후에만 시작
+  useEffect(() => {
+    if (!name || !authed) return
     return onSnapshot(
       collection(db, 'clark-locations'),
       snap => {
@@ -180,7 +187,7 @@ export default function LocationPage() {
       },
       err => setStatus('데이터 로드 오류: ' + err.message)
     )
-  }, [name])
+  }, [name, authed])
 
   // 위치 공유 시작
   function startSharing() {

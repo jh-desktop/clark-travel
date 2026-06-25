@@ -17,9 +17,15 @@ const DARK_STYLE = [
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#1e3a56' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#051225' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0d1825' }] },
+  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: '#0a1628' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0d1f30' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
 ]
 
 // ── 모듈 레벨: 페이지 이동해도 유지 ──────────────────
@@ -145,11 +151,11 @@ export default function LocationPage() {
       const time = new Date(loc.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       const pos = { lat: loc.lat, lng: loc.lng }
       const icon = {
-        path: google.maps.SymbolPath.CIRCLE, scale: 22,
+        path: google.maps.SymbolPath.CIRCLE, scale: 14,
         fillColor: isMe ? '#0ea5e9' : '#374151', fillOpacity: 1,
         strokeColor: isMe ? '#bae6fd' : '#6b7280', strokeWeight: 2,
       }
-      const label = { text: loc.name.slice(0, 2), color: isMe ? '#060d1a' : '#e2e8f0', fontWeight: '700', fontSize: '12px' }
+      const label = { text: loc.name.slice(0, 2), color: isMe ? '#060d1a' : '#e2e8f0', fontWeight: '700', fontSize: '10px' }
       const infoContent = `<div style="background:#0d1825;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-family:sans-serif">
         <div style="font-weight:700;font-size:14px">${loc.name}${isMe ? ' <span style="color:#0ea5e9">(나)</span>' : ''}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:2px">${time} 업데이트</div></div>`

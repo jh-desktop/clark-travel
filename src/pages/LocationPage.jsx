@@ -30,6 +30,26 @@ const DARK_STYLE = [
 
 // ── 모듈 레벨: 페이지 이동해도 유지 ──────────────────
 let globalWatchId = null
+let wakeLock = null
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return
+  try {
+    wakeLock = await navigator.wakeLock.request('screen')
+    wakeLock.addEventListener('release', () => { wakeLock = null })
+  } catch (_) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null }
+}
+
+// 화면이 다시 켜질 때 Wake Lock 재획득
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && globalWatchId !== null && !wakeLock) {
+    acquireWakeLock()
+  }
+})
 
 function startGlobalSharing(user, onStatus) {
   if (globalWatchId !== null || !navigator.geolocation) return
@@ -44,6 +64,7 @@ function startGlobalSharing(user, onStatus) {
     err => onStatus?.(err.code === 1 ? '위치 접근이 거부되었습니다.' : '위치를 가져오지 못했습니다.'),
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
   )
+  acquireWakeLock()
 }
 
 function stopGlobalSharing(user) {
@@ -51,6 +72,7 @@ function stopGlobalSharing(user) {
     navigator.geolocation.clearWatch(globalWatchId)
     globalWatchId = null
   }
+  releaseWakeLock()
   if (user) set(ref(rtdb, `clark-locations/${user.uid}/active`), false)
 }
 // ──────────────────────────────────────────────────────

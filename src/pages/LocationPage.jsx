@@ -3,9 +3,14 @@ import { Loader } from '@googlemaps/js-api-loader'
 import { auth, rtdb, googleProvider } from '../firebase'
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
 import { ref, set, onValue } from 'firebase/database'
+import { Capacitor, registerPlugin } from '@capacitor/core'
+
+// 네이티브 앱에서만 실행됨 - JS 번들 없이 네이티브 브리지로 연결
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation')
 
 const STALE_MS = 30 * 60 * 1000
 const CLARK_CENTER = { lat: 15.179, lng: 120.554 }
+const IS_NATIVE = Capacitor.isNativePlatform()
 
 const DARK_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
@@ -28,12 +33,17 @@ const DARK_STYLE = [
   { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
 ]
 
-// ── 모듈 레벨: 페이지 이동해도 유지 ──────────────────
-let globalWatchId = null
+// ── 모듈 레벨: 페이지 이동/재마운트해도 유지 ────────────
+let globalWatchId = null          // 웹 watchPosition ID
+let globalNativeWatcherId = null  // 네이티브 백그라운드 추적 ID
 let wakeLock = null
 
+function isSharingActive() {
+  return IS_NATIVE ? globalNativeWatcherId !== null : globalWatchId !== null
+}
+
 async function acquireWakeLock() {
-  if (!('wakeLock' in navigator)) return
+  if (IS_NATIVE || !('wakeLock' in navigator)) return
   try {
     wakeLock = await navigator.wakeLock.request('screen')
     wakeLock.addEventListener('release', () => { wakeLock = null })
@@ -44,42 +54,78 @@ function releaseWakeLock() {
   if (wakeLock) { wakeLock.release(); wakeLock = null }
 }
 
-// 화면이 다시 켜질 때 Wake Lock 재획득
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && globalWatchId !== null && !wakeLock) {
-    acquireWakeLock()
-  }
-})
-
-function startGlobalSharing(user, onStatus) {
-  if (globalWatchId !== null || !navigator.geolocation) return
-  const name = user.displayName || user.email?.split('@')[0] || '사용자'
-  globalWatchId = navigator.geolocation.watchPosition(
-    ({ coords: { latitude: lat, longitude: lng } }) => {
-      set(ref(rtdb, `clark-locations/${user.uid}`), {
-        name, lat, lng, active: true, updatedAt: Date.now(),
-      }).catch(err => onStatus?.('저장 오류: ' + err.message))
-      onStatus?.('')
-    },
-    err => onStatus?.(err.code === 1 ? '위치 접근이 거부되었습니다.' : '위치를 가져오지 못했습니다.'),
-    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
-  )
-  acquireWakeLock()
+if (!IS_NATIVE) {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isSharingActive() && !wakeLock) acquireWakeLock()
+  })
 }
 
-function stopGlobalSharing(user) {
-  if (globalWatchId !== null) {
-    navigator.geolocation.clearWatch(globalWatchId)
-    globalWatchId = null
+async function startGlobalSharing(user, onStatus) {
+  if (isSharingActive()) return
+  const name = user.displayName || user.email?.split('@')[0] || '사용자'
+
+  if (IS_NATIVE) {
+    // ── 네이티브 APK: Android Foreground Service로 백그라운드 추적 ──
+    try {
+      globalNativeWatcherId = await BackgroundGeolocation.addWatcher(
+        {
+          backgroundMessage: '클락 여행 멤버들과 위치를 공유하고 있습니다.',
+          backgroundTitle: 'Clark Travel 위치 공유 중',
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 10,
+        },
+        (location, error) => {
+          if (error) {
+            onStatus?.(error.code === 'NOT_AUTHORIZED' ? '위치 권한이 거부되었습니다.' : '위치 오류: ' + error.code)
+            return
+          }
+          if (!location) return
+          set(ref(rtdb, `clark-locations/${user.uid}`), {
+            name, lat: location.latitude, lng: location.longitude,
+            active: true, updatedAt: Date.now(),
+          }).catch(err => onStatus?.('저장 오류: ' + err.message))
+          onStatus?.('')
+        }
+      )
+    } catch (err) {
+      globalNativeWatcherId = null
+      onStatus?.('위치 추적 시작 실패: ' + err.message)
+    }
+  } else {
+    // ── 웹 PWA: watchPosition + Wake Lock ──
+    if (!navigator.geolocation) { onStatus?.('위치를 지원하지 않는 브라우저입니다.'); return }
+    globalWatchId = navigator.geolocation.watchPosition(
+      ({ coords: { latitude: lat, longitude: lng } }) => {
+        set(ref(rtdb, `clark-locations/${user.uid}`), {
+          name, lat, lng, active: true, updatedAt: Date.now(),
+        }).catch(err => onStatus?.('저장 오류: ' + err.message))
+        onStatus?.('')
+      },
+      err => onStatus?.(err.code === 1 ? '위치 접근이 거부되었습니다.' : '위치를 가져오지 못했습니다.'),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    )
+    acquireWakeLock()
   }
-  releaseWakeLock()
+}
+
+async function stopGlobalSharing(user) {
+  if (IS_NATIVE) {
+    if (globalNativeWatcherId !== null) {
+      await BackgroundGeolocation.removeWatcher({ id: globalNativeWatcherId })
+      globalNativeWatcherId = null
+    }
+  } else {
+    if (globalWatchId !== null) { navigator.geolocation.clearWatch(globalWatchId); globalWatchId = null }
+    releaseWakeLock()
+  }
   if (user) set(ref(rtdb, `clark-locations/${user.uid}/active`), false)
 }
 // ──────────────────────────────────────────────────────
 
 export default function LocationPage() {
   const [user, setUser] = useState(undefined)
-  const [sharing, setSharing] = useState(globalWatchId !== null)
+  const [sharing, setSharing] = useState(isSharingActive())
   const [locations, setLocations] = useState([])
   const [status, setStatus] = useState('')
   const [mapReady, setMapReady] = useState(false)
@@ -91,24 +137,21 @@ export default function LocationPage() {
   const infoWindows = useRef({})
   const initialFitDone = useRef(false)
 
-  // 인증 상태
   useEffect(() => {
     return onAuthStateChanged(auth, u => setUser(u ?? null))
   }, [])
 
-  // 로그인 시 자동으로 위치 공유 시작
+  // 로그인되면 자동 위치 공유 시작
   useEffect(() => {
     if (!user) return
-    if (globalWatchId !== null) { setSharing(true); return }
+    if (isSharingActive()) { setSharing(true); return }
     setStatus('위치 권한 요청 중...')
     startGlobalSharing(user, msg => {
       setStatus(msg)
       if (!msg) setSharing(true)
     })
-    setSharing(globalWatchId !== null)
   }, [user])
 
-  // Google 로그인
   async function handleLogin() {
     setLoginLoading(true)
     try {
@@ -120,9 +163,8 @@ export default function LocationPage() {
     }
   }
 
-  // 로그아웃 → 공유 중단
   async function handleLogout() {
-    stopGlobalSharing(user)
+    await stopGlobalSharing(user)
     setSharing(false)
     setLocations([])
     await signOut(auth)
@@ -151,13 +193,12 @@ export default function LocationPage() {
     }
   }, [user])
 
-  // 마커 업데이트 (지도 자동 이동은 최초 1회만)
+  // 마커 업데이트 (최초 1회만 자동 맞춤)
   useEffect(() => {
     if (!mapReady || !mapInst.current || !window.google) return
     const map = mapInst.current
     const google = window.google
 
-    // 없어진 유저 마커 제거
     Object.keys(markers.current).forEach(id => {
       if (!locations.find(l => l.id === id)) {
         markers.current[id].setMap(null)
@@ -167,7 +208,6 @@ export default function LocationPage() {
       }
     })
 
-    // 마커 추가/갱신
     locations.forEach(loc => {
       const isMe = loc.id === user?.uid
       const time = new Date(loc.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -199,7 +239,6 @@ export default function LocationPage() {
       }
     })
 
-    // 최초 1회만 자동 맞춤
     if (!initialFitDone.current && locations.length > 0) {
       initialFitDone.current = true
       if (locations.length === 1) {
@@ -232,7 +271,6 @@ export default function LocationPage() {
     )
   }, [user])
 
-  // ── 로그인 화면 ──
   if (user === undefined) return (
     <div className="pt-nav content">
       <div className="loc-setup"><div className="loc-setup-box" style={{ textAlign: 'center', color: 'var(--muted)' }}>로딩 중...</div></div>
@@ -256,7 +294,6 @@ export default function LocationPage() {
     </div>
   )
 
-  // ── 지도 화면 ──
   return (
     <div className="loc-page pt-nav">
       <div className="loc-header">

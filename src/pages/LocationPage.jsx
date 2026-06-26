@@ -13,31 +13,15 @@ const CLARK_CENTER = { lat: 15.179, lng: 120.554 }
 const IS_NATIVE = Capacitor.isNativePlatform()
 
 const MAP_STYLE = [
-  // 물
+  // 물 색상
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8d5f5' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3b7fc4' }] },
-  // 도로
-  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e0e0e0' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#444444' }] },
+  // 고속도로 강조
   { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#ffe082' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#ffca28' }] },
-  // 공원/녹지
-  { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: '#c5e8a0' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#2e7d32' }] },
-  // 관광지/건물 레이블 (아이콘 제거, 텍스트만 표시)
-  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#5c6bc0' }] },
-  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'poi.attraction', elementType: 'labels.text.fill', stylers: [{ color: '#c62828' }] },
-  { featureType: 'poi.government', elementType: 'labels.text.fill', stylers: [{ color: '#1565c0' }] },
-  { featureType: 'poi.medical', elementType: 'labels.text.fill', stylers: [{ color: '#ad1457' }] },
-  // 대중교통 제거
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#e6a817' }] },
+  // 대중교통 숨김
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  // 행정구역 레이블
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#212121' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  // POI 아이콘만 숨기고 텍스트(건물명/관광지명)는 구글 기본값으로 표시
+  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
 ]
 
 // ── 모듈 레벨: 페이지 이동/재마운트해도 유지 ────────────
@@ -221,10 +205,10 @@ export default function LocationPage() {
       const pos = { lat: loc.lat, lng: loc.lng }
       const icon = {
         path: google.maps.SymbolPath.CIRCLE, scale: 9,
-        fillColor: isMe ? '#1d6fe8' : '#ffffff', fillOpacity: 1,
-        strokeColor: isMe ? '#1d6fe8' : '#64748b', strokeWeight: isMe ? 2 : 2.5,
+        fillColor: isMe ? '#1d6fe8' : '#f97316', fillOpacity: 1,
+        strokeColor: '#ffffff', strokeWeight: 2,
       }
-      const label = { text: loc.name.slice(0, 2), color: isMe ? '#ffffff' : '#334155', fontWeight: '700', fontSize: '9px' }
+      const label = { text: loc.name.slice(0, 2), color: '#ffffff', fontWeight: '700', fontSize: '9px' }
       const infoContent = `<div style="background:#fff;color:#1f2937;padding:6px 12px;border-radius:8px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
         <div style="font-weight:700;font-size:13px">${loc.name}${isMe ? ' <span style="color:#1d6fe8">(나)</span>' : ''}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:2px">${time} 업데이트</div></div>`

@@ -12,25 +12,32 @@ const STALE_MS = 30 * 60 * 1000
 const CLARK_CENTER = { lat: 15.179, lng: 120.554 }
 const IS_NATIVE = Capacitor.isNativePlatform()
 
-const DARK_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#0a1628' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0a1628' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a2d45' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0d1825' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#1e3a56' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#051225' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0d1825' }] },
+const MAP_STYLE = [
+  // 물
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8d5f5' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3b7fc4' }] },
+  // 도로
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e0e0e0' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#444444' }] },
+  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#ffe082' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#ffca28' }] },
+  // 공원/녹지
+  { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: '#c5e8a0' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#2e7d32' }] },
+  // 관광지/건물 레이블 (아이콘 제거, 텍스트만 표시)
   { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
-  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: '#0a1628' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0d1f30' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#5c6bc0' }] },
+  { featureType: 'poi', elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'poi.attraction', elementType: 'labels.text.fill', stylers: [{ color: '#c62828' }] },
+  { featureType: 'poi.government', elementType: 'labels.text.fill', stylers: [{ color: '#1565c0' }] },
+  { featureType: 'poi.medical', elementType: 'labels.text.fill', stylers: [{ color: '#ad1457' }] },
+  // 대중교통 제거
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+  // 행정구역 레이블
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#212121' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
 ]
 
 // ── 모듈 레벨: 페이지 이동/재마운트해도 유지 ────────────
@@ -176,7 +183,7 @@ export default function LocationPage() {
     const loader = new Loader({ apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '', version: 'weekly' })
     loader.load().then(() => {
       mapInst.current = new window.google.maps.Map(mapRef.current, {
-        center: CLARK_CENTER, zoom: 14, styles: DARK_STYLE,
+        center: CLARK_CENTER, zoom: 14, styles: MAP_STYLE,
         mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
         gestureHandling: 'greedy',
       })
@@ -213,13 +220,13 @@ export default function LocationPage() {
       const time = new Date(loc.updatedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       const pos = { lat: loc.lat, lng: loc.lng }
       const icon = {
-        path: google.maps.SymbolPath.CIRCLE, scale: 14,
-        fillColor: isMe ? '#0ea5e9' : '#374151', fillOpacity: 1,
-        strokeColor: isMe ? '#bae6fd' : '#6b7280', strokeWeight: 2,
+        path: google.maps.SymbolPath.CIRCLE, scale: 9,
+        fillColor: isMe ? '#1d6fe8' : '#ffffff', fillOpacity: 1,
+        strokeColor: isMe ? '#1d6fe8' : '#64748b', strokeWeight: isMe ? 2 : 2.5,
       }
-      const label = { text: loc.name.slice(0, 2), color: isMe ? '#060d1a' : '#e2e8f0', fontWeight: '700', fontSize: '10px' }
-      const infoContent = `<div style="background:#0d1825;color:#e2e8f0;padding:6px 10px;border-radius:6px;font-family:sans-serif">
-        <div style="font-weight:700;font-size:14px">${loc.name}${isMe ? ' <span style="color:#0ea5e9">(나)</span>' : ''}</div>
+      const label = { text: loc.name.slice(0, 2), color: isMe ? '#ffffff' : '#334155', fontWeight: '700', fontSize: '9px' }
+      const infoContent = `<div style="background:#fff;color:#1f2937;padding:6px 12px;border-radius:8px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+        <div style="font-weight:700;font-size:13px">${loc.name}${isMe ? ' <span style="color:#1d6fe8">(나)</span>' : ''}</div>
         <div style="font-size:11px;color:#9ca3af;margin-top:2px">${time} 업데이트</div></div>`
 
       if (markers.current[loc.id]) {

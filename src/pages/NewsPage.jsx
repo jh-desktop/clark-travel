@@ -4,15 +4,38 @@ import { rtdb } from '../firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 
+function renderWithLinks(text) {
+  const urlRegex = /https?:\/\/[^\s<>"']+|[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,6}(?:\/[^\s]*)?/g
+  const parts = []
+  let last = 0, m
+  while ((m = urlRegex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    const raw = m[0].replace(/[.,;!?）)]+$/, '')
+    const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    parts.push(
+      <a key={m.index} href={href} target="_blank" rel="noopener noreferrer" className="post-link">{raw}</a>
+    )
+    last = m.index + raw.length
+    urlRegex.lastIndex = last
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts.length ? parts : text
+}
+
 function renderBody(body) {
   if (!body) return null
   return body.split('\n').map((line, i) => {
     const trimmed = line.trim()
-    if (/^https?:\/\/.+/i.test(trimmed) && /\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(trimmed)) {
+    // 한 줄 전체가 이미지 URL인 경우 (확장자 or 이미지 CDN 도메인)
+    if (
+      /^https?:\/\//i.test(trimmed) &&
+      (/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(trimmed) ||
+       /unsplash\.com|pexels\.com|imgur\.com|googleusercontent\.com/i.test(trimmed))
+    ) {
       return <img key={i} src={trimmed} alt="" className="post-image" />
     }
     if (trimmed === '') return <div key={i} className="post-br" />
-    return <span key={i}>{line}<br /></span>
+    return <span key={i}>{renderWithLinks(line)}<br /></span>
   })
 }
 

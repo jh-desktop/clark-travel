@@ -205,8 +205,8 @@ export default function LocationPage() {
       const pos = { lat: loc.lat, lng: loc.lng }
       const icon = {
         path: google.maps.SymbolPath.CIRCLE, scale: 9,
-        fillColor: isMe ? '#1d6fe8' : '#f97316', fillOpacity: 1,
-        strokeColor: '#ffffff', strokeWeight: 2,
+        fillColor: isMe ? '#1e40af' : '#111827', fillOpacity: 1,
+        strokeColor: isMe ? '#93c5fd' : '#6b7280', strokeWeight: 2,
       }
       const label = { text: loc.name.slice(0, 2), color: '#ffffff', fontWeight: '700', fontSize: '9px' }
       const infoContent = `<div style="background:#fff;color:#1f2937;padding:6px 12px;border-radius:8px;font-family:sans-serif;box-shadow:0 2px 8px rgba(0,0,0,0.15)">

@@ -127,116 +127,295 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
-  z-index: 1;
+  overflow: hidden;
+  background: linear-gradient(160deg, #080816 0%, #15093a 35%, #091830 65%, #071410 100%);
+}
+.dday-stars-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.dday-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  animation: dday-twinkle 3s ease-in-out infinite;
+}
+@keyframes dday-twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.6); }
+}
+.dday-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  pointer-events: none;
+  opacity: 0.22;
+}
+.dday-orb-1 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+  top: -160px; right: -160px;
+  animation: dday-orb-a 10s ease-in-out infinite;
+}
+.dday-orb-2 {
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, #0ea5e9 0%, transparent 70%);
+  bottom: -80px; left: -120px;
+  animation: dday-orb-b 13s ease-in-out infinite;
+}
+@keyframes dday-orb-a {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-30px, 35px); }
+}
+@keyframes dday-orb-b {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(35px, -25px); }
 }
 .dday-inner {
+  position: relative;
+  z-index: 1;
   text-align: center;
-  padding: 2rem 1.5rem;
-  max-width: 900px;
+  padding: 2rem 1.25rem 4rem;
+  max-width: 640px;
   width: 100%;
 }
+.dday-crew-label {
+  font-size: 0.7rem;
+  font-family: var(--mono);
+  letter-spacing: 0.28em;
+  color: #818cf8;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+}
+.dday-tagline {
+  font-size: clamp(1.3rem, 5vw, 1.9rem);
+  font-weight: 800;
+  color: #f1f5f9;
+  margin-bottom: 2rem;
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 40px rgba(99, 102, 241, 0.4);
+}
+/* 경로 */
 .dday-route {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
 }
-.dday-city {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--muted2);
-  letter-spacing: -0.01em;
+.dday-city-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+.dday-city-code {
+  font-size: 1.6rem;
+  font-weight: 900;
+  font-family: var(--mono);
+  color: #e2e8f0;
+  letter-spacing: 0.06em;
+}
+.dday-city-name {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.38);
+  letter-spacing: 0.04em;
+}
+.dday-route-line {
+  flex: 1;
+  max-width: 130px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.dday-route-track {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99,102,241,0.7), transparent);
 }
 .dday-plane {
-  font-size: 1.5rem;
-  animation: fly 2s ease-in-out infinite;
+  font-size: 1.6rem;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: dday-fly 2.5s ease-in-out infinite;
 }
-@keyframes fly {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  50% { transform: translateX(6px) rotate(5deg); }
+@keyframes dday-fly {
+  0%, 100% { transform: translateX(-60%) translateY(0) rotate(0deg); }
+  50% { transform: translateX(-40%) translateY(-6px) rotate(6deg); }
 }
-.dday-label {
-  font-size: 1rem;
-  color: var(--muted);
-  margin-bottom: 0.75rem;
-  font-family: var(--mono);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+/* 배지 */
+.dday-badge-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 0.25rem;
+}
+.dday-badge-glow {
+  position: absolute;
+  inset: -30px;
+  background: radial-gradient(circle, rgba(251,191,36,0.4) 0%, transparent 65%);
+  border-radius: 50%;
+  animation: dday-glow-pulse 2s ease-in-out infinite;
+}
+@keyframes dday-glow-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
 }
 .dday-badge {
   display: inline-block;
-  font-size: clamp(3.5rem, 12vw, 7rem);
+  font-size: clamp(4rem, 16vw, 8.5rem);
   font-weight: 900;
   font-family: var(--mono);
-  color: var(--accent);
+  color: #fbbf24;
   line-height: 1;
-  margin-bottom: 0.5rem;
-  text-shadow: 0 0 60px rgba(14, 165, 233, 0.35);
+  text-shadow: 0 0 40px rgba(251,191,36,0.7), 0 0 100px rgba(245,158,11,0.3);
+  position: relative;
 }
+/* 타이머 */
 .dday-timer {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.75rem;
 }
 .dday-unit {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 1rem;
-  padding: 1rem 1.5rem;
-  min-width: 80px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(99,102,241,0.35);
+  border-radius: 0.875rem;
+  padding: 0.875rem 1.125rem;
+  min-width: 68px;
+  box-shadow: 0 0 24px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
 }
 .dday-num {
-  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
   font-weight: 900;
   font-family: var(--mono);
-  color: var(--text);
+  color: #f0f4ff;
   line-height: 1;
+  text-shadow: 0 0 18px rgba(99,102,241,0.9);
 }
 .dday-unit-label {
-  font-size: 0.68rem;
-  color: var(--muted);
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.3);
   font-family: var(--mono);
-  letter-spacing: 0.1em;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 .dday-colon {
-  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  font-size: clamp(1.2rem, 3.5vw, 2rem);
   font-weight: 900;
   font-family: var(--mono);
-  color: var(--border2);
-  margin-bottom: 1.2rem;
+  color: rgba(99,102,241,0.65);
+  margin-bottom: 1rem;
+  animation: dday-blink 1s step-end infinite;
+}
+@keyframes dday-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
 }
 .dday-date {
-  font-size: 0.9rem;
-  color: var(--gold);
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.38);
   margin-bottom: 2.5rem;
   font-family: var(--mono);
+  letter-spacing: 0.03em;
 }
+/* 멤버 섹션 */
+.dday-members { margin-bottom: 2rem; }
+.dday-members-title {
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+.dday-member-cards {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+.dday-member-card {
+  flex: 1;
+  max-width: 168px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 1.125rem;
+  padding: 1.25rem 0.75rem;
+  backdrop-filter: blur(14px);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dday-member-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(99,102,241,0.45);
+  box-shadow: 0 8px 32px rgba(99,102,241,0.12);
+}
+.dday-member-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+.dday-member-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  padding: 0.18rem 0.65rem;
+  border-radius: 2rem;
+  border: 1px solid;
+}
+.dday-member-name {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+.dday-member-role {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.32);
+  font-family: var(--mono);
+}
+.dday-member-desc {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.45);
+  white-space: pre-line;
+  text-align: center;
+  line-height: 1.55;
+  margin-top: 0.1rem;
+}
+/* 정보 카드 */
 .dday-info-row {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
 }
 .dday-info-card {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  gap: 0.65rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
   border-radius: 0.875rem;
-  padding: 0.875rem 1.25rem;
-  min-width: 160px;
+  padding: 0.75rem 1rem;
+  min-width: 140px;
+  backdrop-filter: blur(8px);
 }
-.dday-info-icon { font-size: 1.5rem; }
-.dday-info-title { font-size: 0.72rem; color: var(--muted); margin-bottom: 0.2rem; }
-.dday-info-val { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.dday-info-icon { font-size: 1.25rem; }
+.dday-info-title { font-size: 0.63rem; color: rgba(255,255,255,0.3); margin-bottom: 0.15rem; }
+.dday-info-val { font-size: 0.85rem; font-weight: 700; color: #e2e8f0; }
 
 /* ── News Page ──────────────────────── */
 .news-page {
@@ -584,8 +763,11 @@ body {
 /* ── Responsive ─────────────────────── */
 @media (max-width: 640px) {
   .navbar { padding: 0 1rem; }
-  .dday-unit { padding: 0.75rem 0.875rem; min-width: 64px; }
+  .dday-unit { padding: 0.75rem 0.75rem; min-width: 58px; }
   .dday-info-row { flex-direction: column; align-items: center; }
+  .dday-member-desc { display: none; }
+  .dday-member-card { padding: 1rem 0.5rem; }
+  .dday-member-cards { gap: 0.5rem; }
   .news-page, .guide-page, .admin-page { padding: 2rem 1.25rem 4rem; }
   .nav-link { padding: 0.35rem 0.5rem; font-size: 0.82rem; }
 }

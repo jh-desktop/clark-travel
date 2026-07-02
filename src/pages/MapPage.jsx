@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { Loader } from '@googlemaps/js-api-loader'
 
+// 정확한 좌표 출처:
+// 공항: latlong.net  |  SM: distancesto.com  |  Hann: casinocity.ph
+// 로이스: roycehotelandcasino.com 공식  |  워킹/호텔: Balibago 주소 기반
 const PLACES = [
   {
     id: 'airport',
@@ -16,13 +19,24 @@ const PLACES = [
   {
     id: 'hann',
     name: '한 카지노 리조트 (Hann Casino)',
-    label: '카지',
+    label: '한',
     lat: 15.1920,
     lng: 120.5240,
     color: '#f59e0b',
     category: '카지노',
     desc: '5399 Manuel A. Roxas Hwy, Clark Freeport.\n24시간 운영. 홀덤·바카라·슬롯 전 게임.',
     emoji: '🎰',
+  },
+  {
+    id: 'royce',
+    name: '로이스 호텔 & 카지노 (Royce)',
+    label: '로이',
+    lat: 15.1808,
+    lng: 120.5301,
+    color: '#f97316',
+    category: '카지노',
+    desc: 'M.A. Roxas Hwy corner Ninoy Aquino Ave.\n공항 5분 거리. 500객실 대형 복합 리조트.',
+    emoji: '🎲',
   },
   {
     id: 'sm',
@@ -57,16 +71,26 @@ const PLACES = [
     desc: 'Fields Ave, Balibago. 밤 9시~새벽 5시.\n바·클럽·라이브밴드·고고바 밀집 지역.',
     emoji: '🌃',
   },
+]
+
+// 한인타운: Fil-Am Friendship Hwy 구역 (nearbyph.com 좌표 기반)
+// 중심: 15.1497, 120.5591 (Anunas) / 15.1416, 120.5618 (남단)
+const ZONES = [
   {
     id: 'koreatown',
     name: '한인타운 (코리안타운)',
-    label: '한인',
-    lat: 15.1505,
-    lng: 120.5849,
+    emoji: '🇰🇷',
     color: '#8b5cf6',
     category: '한인타운',
-    desc: 'Fil-Am Friendship Hwy, Anunas 일대.\n한식당·KTV·해운대 술집. 한국어 OK.',
-    emoji: '🇰🇷',
+    desc: 'Fil-Am Friendship Hwy, Anunas 일대.\n한식당·KTV·해운대 술집. 한국어 OK.\n약 6km 구간, 1,000여 개 한국 업소 밀집.',
+    center: { lat: 15.1500, lng: 120.5594 },
+    focusZoom: 14,
+    path: [
+      { lat: 15.1585, lng: 120.5545 },
+      { lat: 15.1585, lng: 120.5625 },
+      { lat: 15.1415, lng: 120.5650 },
+      { lat: 15.1415, lng: 120.5570 },
+    ],
   },
 ]
 
@@ -83,6 +107,7 @@ export default function MapPage() {
   const mapInst = useRef(null)
   const markersRef = useRef({})
   const infoWindowsRef = useRef({})
+  const polygonsRef = useRef({})
 
   useEffect(() => {
     if (mapInst.current) return
@@ -93,7 +118,7 @@ export default function MapPage() {
     loader.load().then(() => {
       const google = window.google
       const map = new google.maps.Map(mapRef.current, {
-        center: { lat: 15.172, lng: 120.562 },
+        center: { lat: 15.165, lng: 120.558 },
         zoom: 13,
         styles: MAP_STYLE,
         mapTypeControl: false,
@@ -103,6 +128,7 @@ export default function MapPage() {
       })
       mapInst.current = map
 
+      // ── 일반 마커 ──
       PLACES.forEach(place => {
         const marker = new google.maps.Marker({
           position: { lat: place.lat, lng: place.lng },
@@ -127,7 +153,7 @@ export default function MapPage() {
 
         const info = new google.maps.InfoWindow({
           content: `
-            <div style="font-family:-apple-system,sans-serif;padding:6px 4px;min-width:190px">
+            <div style="font-family:-apple-system,sans-serif;padding:6px 4px;min-width:195px">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
                 <span style="font-size:22px;line-height:1">${place.emoji}</span>
                 <div>
@@ -149,36 +175,125 @@ export default function MapPage() {
         infoWindowsRef.current[place.id] = info
       })
 
+      // ── 구역 폴리곤 (한인타운 등) ──
+      ZONES.forEach(zone => {
+        const polygon = new google.maps.Polygon({
+          paths: zone.path,
+          strokeColor: zone.color,
+          strokeOpacity: 0.9,
+          strokeWeight: 2.5,
+          fillColor: zone.color,
+          fillOpacity: 0.18,
+          map,
+          zIndex: 5,
+        })
+
+        // 구역 중심 라벨 마커
+        const labelMarker = new google.maps.Marker({
+          position: zone.center,
+          map,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: zone.color,
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2.5,
+          },
+          label: {
+            text: '한인',
+            color: '#ffffff',
+            fontWeight: '800',
+            fontSize: '9px',
+          },
+          zIndex: 10,
+        })
+
+        const info = new google.maps.InfoWindow({
+          content: `
+            <div style="font-family:-apple-system,sans-serif;padding:6px 4px;min-width:195px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                <span style="font-size:22px;line-height:1">${zone.emoji}</span>
+                <div>
+                  <div style="font-weight:800;font-size:13px;color:#111827;line-height:1.3">${zone.name}</div>
+                  <div style="font-size:11px;font-weight:700;color:${zone.color};margin-top:2px">${zone.category} · 구역</div>
+                </div>
+              </div>
+              <div style="font-size:11.5px;color:#6b7280;white-space:pre-line;line-height:1.65;border-top:1px solid #f3f4f6;padding-top:6px">${zone.desc}</div>
+            </div>
+          `,
+        })
+
+        const openInfo = () => {
+          Object.values(infoWindowsRef.current).forEach(w => w.close())
+          info.open(map, labelMarker)
+        }
+        polygon.addListener('click', openInfo)
+        labelMarker.addListener('click', openInfo)
+
+        polygonsRef.current[zone.id] = { polygon, labelMarker, info, zone }
+        infoWindowsRef.current[zone.id] = info
+        markersRef.current[zone.id] = labelMarker
+      })
+
+      // 전체 범위에 맞게 초기 화면 설정
       const bounds = new google.maps.LatLngBounds()
       PLACES.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }))
+      ZONES.forEach(z => z.path.forEach(pt => bounds.extend(pt)))
       map.fitBounds(bounds, { top: 50, bottom: 20, left: 30, right: 30 })
     })
   }, [])
 
-  function focusPlace(id) {
-    const place = PLACES.find(p => p.id === id)
-    if (!place || !mapInst.current || !window.google) return
-    mapInst.current.panTo({ lat: place.lat, lng: place.lng })
-    mapInst.current.setZoom(16)
+  function focusItem(id) {
+    if (!mapInst.current || !window.google) return
     Object.values(infoWindowsRef.current).forEach(w => w.close())
-    infoWindowsRef.current[id]?.open(mapInst.current, markersRef.current[id])
+
+    const zone = ZONES.find(z => z.id === id)
+    if (zone) {
+      mapInst.current.panTo(zone.center)
+      mapInst.current.setZoom(zone.focusZoom)
+      infoWindowsRef.current[id]?.open(mapInst.current, markersRef.current[id])
+      return
+    }
+
+    const place = PLACES.find(p => p.id === id)
+    if (place) {
+      mapInst.current.panTo({ lat: place.lat, lng: place.lng })
+      mapInst.current.setZoom(17)
+      infoWindowsRef.current[id]?.open(mapInst.current, markersRef.current[id])
+    }
   }
+
+  const allItems = [
+    ...PLACES.map(p => ({ ...p, isZone: false })),
+    ...ZONES.map(z => ({ ...z, isZone: true, lat: z.center.lat, lng: z.center.lng })),
+  ]
 
   return (
     <div className="map-page-wrap pt-nav">
       <div className="map-page-map" ref={mapRef} />
       <div className="map-page-cards">
-        {PLACES.map(place => (
+        {allItems.map(item => (
           <button
-            key={place.id}
+            key={item.id}
             className="map-place-btn"
-            onClick={() => focusPlace(place.id)}
+            onClick={() => focusItem(item.id)}
           >
-            <span className="map-place-dot" style={{ background: place.color }} />
-            <span className="map-place-emoji">{place.emoji}</span>
+            <span
+              className="map-place-dot"
+              style={{
+                background: item.isZone ? 'transparent' : item.color,
+                border: item.isZone ? `2px solid ${item.color}` : 'none',
+                width: item.isZone ? '10px' : '8px',
+                height: item.isZone ? '10px' : '8px',
+              }}
+            />
+            <span className="map-place-emoji">{item.emoji}</span>
             <div className="map-place-info">
-              <div className="map-place-name">{place.name}</div>
-              <div className="map-place-cat" style={{ color: place.color }}>{place.category}</div>
+              <div className="map-place-name">{item.name}</div>
+              <div className="map-place-cat" style={{ color: item.color }}>
+                {item.category}{item.isZone ? ' · 구역' : ''}
+              </div>
             </div>
           </button>
         ))}

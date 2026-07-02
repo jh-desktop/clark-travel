@@ -19,8 +19,8 @@ export default function Navbar() {
         <NavLink to="/news" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
           뉴스
         </NavLink>
-        <NavLink to="/guide" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-          가이드
+        <NavLink to="/map" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+          🗺 지도
         </NavLink>
         {isAdmin ? (
           <>
